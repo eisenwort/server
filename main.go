@@ -36,6 +36,7 @@ func init() {
 func main() {
 	userCtrl := controller.NewUserCtrl(config)
 	chatCtrl := controller.NewChatCtrl(config)
+	messageCtrl := controller.NewMessageCtrl(config)
 
 	router := httprouter.New()
 	router.POST("/login", userCtrl.Login)
@@ -48,6 +49,9 @@ func main() {
 	router.DELETE("/chats/:id", chatCtrl.Delete)
 	router.DELETE("/chats/:id/exit", chatCtrl.Exit)
 	router.DELETE("/chats/:id/clean", chatCtrl.Clean)
+
+	router.POST("/messages", messageCtrl.Create)
+	router.DELETE("/messages/:id", messageCtrl.Delete)
 
 	log.Println("Server start on", config.ServiceAddress)
 

@@ -11,14 +11,16 @@ import (
 )
 
 type ChatCtrl struct {
-	config  *dao.Config
-	service *ewc.DbChatService
+	config      *dao.Config
+	service     *ewc.DbChatService
+	userService *ewc.DbUserService
 }
 
 func NewChatCtrl(cfg *dao.Config) *ChatCtrl {
 	ctrl := new(ChatCtrl)
 	ctrl.config = cfg
 	ctrl.service = ewc.NewDbChatService(cfg.Driver, cfg.ConnectionString)
+	ctrl.userService = ewc.NewDbUserService(cfg.Driver, cfg.ConnectionString)
 
 	return ctrl
 }
@@ -67,6 +69,10 @@ func (ctrl *ChatCtrl) Create(w http.ResponseWriter, r *http.Request, ps httprout
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
+	if user := ctrl.userService.Get(userID); user.Reseted {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	chat := &ewc.Chat{}
 	isExist := false
@@ -94,7 +100,7 @@ func (ctrl *ChatCtrl) Create(w http.ResponseWriter, r *http.Request, ps httprout
 
 	w.WriteHeader(http.StatusCreated)
 
-	if err := json.NewEncoder(w).Encode(chat); err != nil {
+	if err := json.NewEncoder(w).Encode(item); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -106,6 +112,7 @@ func (ctrl *ChatCtrl) Delete(w http.ResponseWriter, r *http.Request, ps httprout
 		return
 	}
 
+	userID, _ := strconv.ParseInt(r.Header.Get("X-Auth-Id"), 10, 64)
 	id, _ := strconv.ParseInt(ps.ByName("id"), 10, 64)
 	chat, _ := ctrl.service.Get(id, true)
 

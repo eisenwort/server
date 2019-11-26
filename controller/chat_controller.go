@@ -26,7 +26,7 @@ func NewChatCtrl(cfg *dao.Config) *ChatCtrl {
 }
 
 func (ctrl *ChatCtrl) GetList(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	userID, err := strconv.ParseInt(r.Header.Get("X-Auth-Id"), 10, 64)
+	userID, err := strconv.ParseInt(r.Header.Get(core.IdHeader), 10, 64)
 
 	if err != nil {
 		w.WriteHeader(http.StatusForbidden)
@@ -63,7 +63,7 @@ func (ctrl *ChatCtrl) Get(w http.ResponseWriter, r *http.Request, ps httprouter.
 }
 
 func (ctrl *ChatCtrl) Create(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	userID, err := strconv.ParseInt(r.Header.Get("X-Auth-Id"), 10, 64)
+	userID, err := strconv.ParseInt(r.Header.Get(core.IdHeader), 10, 64)
 
 	if err != nil {
 		w.WriteHeader(http.StatusForbidden)

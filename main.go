@@ -39,10 +39,14 @@ func main() {
 	messageCtrl := controller.NewMessageCtrl(config)
 
 	router := httprouter.New()
+
+	// user
 	router.POST("/login", userCtrl.Login)
 	router.POST("/registration", userCtrl.Registration)
 	router.PUT("/users/:id", userCtrl.Update)
+	router.GET("/users/:id", userCtrl.Get)
 
+	// chat
 	router.GET("/chats", chatCtrl.GetList)
 	router.GET("/chats/:id", chatCtrl.Get)
 	router.POST("/chats", chatCtrl.Create)
@@ -50,6 +54,7 @@ func main() {
 	router.DELETE("/chats/:id/exit", chatCtrl.Exit)
 	router.DELETE("/chats/:id/clean", chatCtrl.Clean)
 
+	// message
 	router.POST("/messages", messageCtrl.Create)
 	router.DELETE("/messages/:id", messageCtrl.Delete)
 

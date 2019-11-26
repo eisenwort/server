@@ -49,7 +49,7 @@ func (ctrl MessageCtrl) Create(w http.ResponseWriter, r *http.Request, ps httpro
 
 func (ctrl MessageCtrl) Delete(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	msg := new(ewc.Message)
-	userID, err := strconv.ParseInt(r.Header.Get("X-Auth-Id"), 10, 64)
+	userID, err := strconv.ParseInt(r.Header.Get(core.IdHeader), 10, 64)
 
 	if err != nil {
 		w.WriteHeader(http.StatusForbidden)

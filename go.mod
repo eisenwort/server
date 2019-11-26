@@ -1,6 +1,6 @@
 module server
 
-go 1.12
+go 1.13
 
 require (
 	4d63.com/gochecknoglobals v0.0.0-20190118042838-abbdf6ec0afb // indirect
@@ -10,6 +10,7 @@ require (
 	github.com/alexflint/go-arg v1.0.0 // indirect
 	github.com/alexkohler/nakedret v0.0.0-20171106223215-c0e305a4f690 // indirect
 	github.com/client9/misspell v0.3.4 // indirect
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/golang/lint v0.0.0-20190301231843-5614ed5bae6f // indirect
 	github.com/gordonklaus/ineffassign v0.0.0-20180909121442-1003c8bd00dc // indirect
 	github.com/jgautheron/goconst v0.0.0-20170703170152-9740945f5dcb // indirect

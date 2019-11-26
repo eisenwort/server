@@ -1,5 +1,5 @@
 package main
 
-func checkJwt() {
+func checkJwt(r *http.Request) {
 
 }

@@ -3,9 +3,10 @@ package controller
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
+
 	"server/core/ewc"
 	"server/model/dao"
-	"strconv"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -26,14 +27,8 @@ func NewChatCtrl(cfg *dao.Config) *ChatCtrl {
 }
 
 func (ctrl *ChatCtrl) GetList(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	userID, err := strconv.ParseInt(r.Header.Get(core.IdHeader), 10, 64)
-
-	if err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
-
-	chats, err := ctrl.service.GetForUser(userID)
+	claims := getClaims(r)
+	chats, err := ctrl.service.GetForUser(claims.Id)
 
 	// todo: unread messages
 
@@ -63,13 +58,9 @@ func (ctrl *ChatCtrl) Get(w http.ResponseWriter, r *http.Request, ps httprouter.
 }
 
 func (ctrl *ChatCtrl) Create(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	userID, err := strconv.ParseInt(r.Header.Get(core.IdHeader), 10, 64)
+	claims := getClaims(r)
 
-	if err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
-	if user := ctrl.userService.Get(userID); user.Reseted {
+	if user := ctrl.userService.Get(claims.Id); user.Reseted {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -82,7 +73,7 @@ func (ctrl *ChatCtrl) Create(w http.ResponseWriter, r *http.Request, ps httprout
 		return
 	}
 	for _, user := range chat.Users {
-		if user.ID == userID {
+		if user.ID == claims.Id {
 			isExist = true
 		}
 	}
@@ -112,11 +103,11 @@ func (ctrl *ChatCtrl) Delete(w http.ResponseWriter, r *http.Request, ps httprout
 		return
 	}
 
-	userID, _ := strconv.ParseInt(r.Header.Get("X-Auth-Id"), 10, 64)
+	claims := getClaims(r)
 	id, _ := strconv.ParseInt(ps.ByName("id"), 10, 64)
 	chat, _ := ctrl.service.Get(id, true)
 
-	if !chat.Personal || chat.OwnerID != userID {
+	if !chat.Personal || chat.OwnerID != claims.Id {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -151,12 +142,7 @@ func (ctrl *ChatCtrl) Clean(w http.ResponseWriter, r *http.Request, ps httproute
 }
 
 func (ctrl *ChatCtrl) checkRights(w http.ResponseWriter, r *http.Request, ps httprouter.Params) int {
-	userID, err := strconv.ParseInt(r.Header.Get("X-Auth-Id"), 10, 64)
-
-	if err != nil {
-		return http.StatusForbidden
-	}
-
+	claims := getClaims(r)
 	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
 
 	if err != nil {
@@ -167,10 +153,10 @@ func (ctrl *ChatCtrl) checkRights(w http.ResponseWriter, r *http.Request, ps htt
 	isExist := false
 
 	if err != nil {
-		return http.StatusInternalServerError
+		return http.StatusNotFound
 	}
 	for _, user := range chat.Users {
-		if user.ID == userID {
+		if user.ID == claims.Id {
 			isExist = true
 		}
 	}

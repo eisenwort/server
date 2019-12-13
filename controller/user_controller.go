@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"server/core/ewc"
-	"server/model/dao"
 	"strconv"
 	"time"
+
+	"server/core/ewc"
+	"server/model/dao"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/julienschmidt/httprouter"
@@ -16,8 +17,9 @@ import (
 
 // UserCtrl - controller fot user
 type UserCtrl struct {
-	config  *dao.Config
-	service *ewc.DbUserService
+	config        *dao.Config
+	service       *ewc.DbUserService
+	tokenLifeTime time.Duration
 }
 
 // NewUserCtrl - create user controller
@@ -25,6 +27,7 @@ func NewUserCtrl(cfg *dao.Config) *UserCtrl {
 	ctrl := new(UserCtrl)
 	ctrl.config = cfg
 	ctrl.service = ewc.NewDbUserService(cfg.Driver, cfg.ConnectionString)
+	ctrl.tokenLifeTime = 1 * time.Hour
 
 	return ctrl
 }
@@ -54,21 +57,19 @@ func (ctrl *UserCtrl) Login(w http.ResponseWriter, r *http.Request, ps httproute
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	// if err := json.NewEncoder(w).Encode(user); err != nil {
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// }
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, dao.JwtClaims{
-		Exp: time.Now().Add(srv.tokenLifeTime).Unix(),
+		Exp: time.Now().Add(ctrl.tokenLifeTime).Unix(),
 		Id:  user.ID,
 	})
-	tokenString, err := token.SignedString([]byte(srv.vkSecret))
+	tokenString, err := token.SignedString([]byte(ctrl.config.JwtSign))
 
 	if err != nil {
 		log.Println("create token error", err.Error())
-		return ""
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
-	tokenJson := fmt.Sprintf(`{ "token": "%s" }`, token)
+	tokenJson := fmt.Sprintf(`{ "token": "%s" }`, tokenString)
 	w.Write([]byte(tokenJson))
 }
 
@@ -99,39 +100,39 @@ func (ctrl *UserCtrl) Registration(w http.ResponseWriter, r *http.Request, ps ht
 		w.Write(errData)
 		return
 	}
-	// if err := json.NewEncoder(w).Encode(user); err != nil {
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// }
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, dao.JwtClaims{
-		Exp: time.Now().Add(srv.tokenLifeTime).Unix(),
+		Exp: time.Now().Add(ctrl.tokenLifeTime).Unix(),
 		Id:  user.ID,
 	})
-	tokenString, err := token.SignedString([]byte(srv.vkSecret))
+	tokenString, err := token.SignedString([]byte(ctrl.config.JwtSign))
 
 	if err != nil {
 		log.Println("create token error", err.Error())
-		return ""
+		return
 	}
 
-	tokenJson := fmt.Sprintf(`{ "token": "%s" }`, token)
+	tokenJson := fmt.Sprintf(`{ "token": "%s" }`, tokenString)
 	w.Write([]byte(tokenJson))
 }
 
 func (ctrl *UserCtrl) Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	user := new(ewc.User)
+	claims := getClaims(r)
 
 	if err := json.NewDecoder(r.Body).Decode(user); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if id, err := strconv.ParseInt(ps.ByName("id"), 10, 64); err != nil {
+
+	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
+
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
-
-		if id != user.ID {
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
+	}
+	if id != user.ID || id != claims.Id {
+		w.WriteHeader(http.StatusForbidden)
+		return
 	}
 
 	user = ctrl.service.Update(user)
@@ -146,8 +147,17 @@ func (ctrl *UserCtrl) Update(w http.ResponseWriter, r *http.Request, ps httprout
 }
 
 func (ctrl *UserCtrl) Get(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	if id, err := strconv.ParseInt(ps.ByName("id"), 10, 64); err != nil {
+	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
+
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	claims := getClaims(r)
+
+	if id != claims.Id {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
@@ -163,8 +173,13 @@ func (ctrl *UserCtrl) Get(w http.ResponseWriter, r *http.Request, ps httprouter.
 }
 
 func (ctrl *UserCtrl) GetByLogin(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	claims := getClaims(r)
 	user := ctrl.service.GetByLogin(ps.ByName("login"))
 
+	if user.ID != claims.Id {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
 	if err := json.NewEncoder(w).Encode(user); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}

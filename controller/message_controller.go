@@ -3,9 +3,9 @@ package controller
 import (
 	"encoding/json"
 	"net/http"
+
 	"server/core/ewc"
 	"server/model/dao"
-	"strconv"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -25,9 +25,14 @@ func NewMessageCtrl(cfg *dao.Config) *MessageCtrl {
 
 func (ctrl MessageCtrl) Create(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	msg := new(ewc.Message)
+	claims := getClaims(r)
 
 	if err := json.NewDecoder(r.Body).Decode(msg); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if msg.UserID != claims.Id {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
@@ -49,17 +54,13 @@ func (ctrl MessageCtrl) Create(w http.ResponseWriter, r *http.Request, ps httpro
 
 func (ctrl MessageCtrl) Delete(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	msg := new(ewc.Message)
-	userID, err := strconv.ParseInt(r.Header.Get(core.IdHeader), 10, 64)
+	claims := getClaims(r)
 
-	if err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
 	if err := json.NewDecoder(r.Body).Decode(msg); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if msg.UserID != userID {
+	if msg.UserID != claims.Id {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}

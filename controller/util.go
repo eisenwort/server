@@ -1,8 +1,8 @@
 package controller
 
 import (
+	"log"
 	"net/http"
-	"strings"
 
 	"server/model/dao"
 
@@ -13,11 +13,15 @@ var Config *dao.Config
 
 func getClaims(r *http.Request) dao.JwtClaims {
 	claims := dao.JwtClaims{}
-	token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	token := r.Header.Get("X-Auth-Token")
 
-	_, _ = jwt.ParseWithClaims(token, &claims, func(token *jwt.Token) (interface{}, error) {
+	_, err := jwt.ParseWithClaims(token, &claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(Config.JwtSign), nil
 	})
+
+	if err != nil {
+		log.Println("parse JWT error:", err)
+	}
 
 	return claims
 }

@@ -15,6 +15,11 @@ type ApiError struct {
 	Error string `json:"error,omitempty"`
 }
 
+type AuthData struct {
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
 type JwtClaims struct {
 	*jwt.MapClaims
 	Id  int64

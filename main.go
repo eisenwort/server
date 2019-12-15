@@ -6,8 +6,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-
 	"server/controller"
+	"server/core/ewc"
 	"server/middleware"
 	"server/model/dao"
 
@@ -48,6 +48,11 @@ func jwtHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ha
 }
 
 func main() {
+	ewc.Setup(ewc.SetupData{
+		DbDriver:         config.Driver,
+		ConnectionString: config.ConnectionString,
+	})
+
 	userCtrl := controller.NewUserCtrl(config)
 	chatCtrl := controller.NewChatCtrl(config)
 	messageCtrl := controller.NewMessageCtrl(config)
@@ -57,6 +62,9 @@ func main() {
 	// user
 	router.POST("/login", userCtrl.Login)
 	router.POST("/registration", userCtrl.Registration)
+	router.POST("/users/:id/refresh", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		jwtHandler(w, r, ps, userCtrl.RefreshToken)
+	})
 	router.PUT("/users/:id", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		jwtHandler(w, r, ps, userCtrl.Update)
 	})

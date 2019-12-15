@@ -2,8 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -26,7 +24,7 @@ type UserCtrl struct {
 func NewUserCtrl(cfg *dao.Config) *UserCtrl {
 	ctrl := new(UserCtrl)
 	ctrl.config = cfg
-	ctrl.service = ewc.NewDbUserService(cfg.Driver, cfg.ConnectionString)
+	ctrl.service = ewc.NewDbUserService()
 	ctrl.tokenLifeTime = 1 * time.Hour
 
 	return ctrl
@@ -57,20 +55,9 @@ func (ctrl *UserCtrl) Login(w http.ResponseWriter, r *http.Request, ps httproute
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, dao.JwtClaims{
-		Exp: time.Now().Add(ctrl.tokenLifeTime).Unix(),
-		Id:  user.ID,
-	})
-	tokenString, err := token.SignedString([]byte(ctrl.config.JwtSign))
 
-	if err != nil {
-		log.Println("create token error", err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	tokenJson := fmt.Sprintf(`{ "token": "%s" }`, tokenString)
-	w.Write([]byte(tokenJson))
+	jsonData, _ := json.Marshal(ctrl.createAuthData(user.ID))
+	w.Write(jsonData)
 }
 
 // Login - auth user
@@ -100,19 +87,30 @@ func (ctrl *UserCtrl) Registration(w http.ResponseWriter, r *http.Request, ps ht
 		w.Write(errData)
 		return
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, dao.JwtClaims{
-		Exp: time.Now().Add(ctrl.tokenLifeTime).Unix(),
-		Id:  user.ID,
-	})
-	tokenString, err := token.SignedString([]byte(ctrl.config.JwtSign))
+
+	jsonData, _ := json.Marshal(ctrl.createAuthData(user.ID))
+	w.Write(jsonData)
+}
+
+func (ctrl *UserCtrl) RefreshToken(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	claims := getClaims(r)
+	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
 
 	if err != nil {
-		log.Println("create token error", err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if claims.Id == 0 {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	if claims.Id != id {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
-	tokenJson := fmt.Sprintf(`{ "token": "%s" }`, tokenString)
-	w.Write([]byte(tokenJson))
+	jsonData, _ := json.Marshal(ctrl.createAuthData(id))
+	w.Write(jsonData)
 }
 
 func (ctrl *UserCtrl) Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -182,5 +180,22 @@ func (ctrl *UserCtrl) GetByLogin(w http.ResponseWriter, r *http.Request, ps http
 	}
 	if err := json.NewEncoder(w).Encode(user); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+func (ctrl *UserCtrl) createToken(id int64, duration time.Duration) string {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, dao.JwtClaims{
+		Exp: time.Now().Add(duration).Unix(),
+		Id:  id,
+	})
+	tokenString, _ := token.SignedString([]byte(ctrl.config.JwtSign))
+
+	return tokenString
+}
+
+func (ctrl *UserCtrl) createAuthData(id int64) *dao.AuthData {
+	return &dao.AuthData{
+		Token:        ctrl.createToken(id, ctrl.tokenLifeTime),
+		RefreshToken: ctrl.createToken(id, 336*time.Hour),
 	}
 }

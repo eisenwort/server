@@ -20,8 +20,8 @@ type ChatCtrl struct {
 func NewChatCtrl(cfg *dao.Config) *ChatCtrl {
 	ctrl := new(ChatCtrl)
 	ctrl.config = cfg
-	ctrl.service = ewc.NewDbChatService(cfg.Driver, cfg.ConnectionString)
-	ctrl.userService = ewc.NewDbUserService(cfg.Driver, cfg.ConnectionString)
+	ctrl.service = ewc.NewDbChatService()
+	ctrl.userService = ewc.NewDbUserService()
 
 	return ctrl
 }

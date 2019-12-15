@@ -18,7 +18,7 @@ type MessageCtrl struct {
 func NewMessageCtrl(cfg *dao.Config) *MessageCtrl {
 	ctrl := new(MessageCtrl)
 	ctrl.config = cfg
-	ctrl.service = ewc.NewDbMessageService(cfg.Driver, cfg.ConnectionString)
+	ctrl.service = ewc.NewDbMessageService()
 
 	return ctrl
 }

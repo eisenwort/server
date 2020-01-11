@@ -2,11 +2,11 @@ package controller
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
-	"strconv"
-
 	"server/core/ewc"
 	"server/model/dao"
+	"strconv"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -30,9 +30,10 @@ func (ctrl *ChatCtrl) GetList(w http.ResponseWriter, r *http.Request, ps httprou
 	claims := getClaims(r)
 	chats, err := ctrl.service.GetForUser(claims.Id)
 
-	// todo: unread messages
+	// TODO: unread messages
 
 	if err != nil {
+		log.Println("get chat list for user error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -48,8 +49,16 @@ func (ctrl *ChatCtrl) Get(w http.ResponseWriter, r *http.Request, ps httprouter.
 		return
 	}
 
-	id, _ := strconv.ParseInt(ps.ByName("id"), 10, 64)
-	chat, _ := ctrl.service.Get(id, true)
+	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
+
+	if err != nil {
+		log.Println("parse id error:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	includes := getInclude(ps)
+	chat, err := ctrl.service.Get(id, includes)
 
 	if err := json.NewEncoder(w).Encode(chat); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -104,9 +113,23 @@ func (ctrl *ChatCtrl) Delete(w http.ResponseWriter, r *http.Request, ps httprout
 	}
 
 	claims := getClaims(r)
-	id, _ := strconv.ParseInt(ps.ByName("id"), 10, 64)
-	chat, _ := ctrl.service.Get(id, true)
+	f := ps.ByName("id")
+	log.Println(f)
+	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
 
+	if err != nil {
+		log.Println("parse id for delete error:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	chat, err := ctrl.service.Get(id, []string{})
+
+	if err != nil {
+		log.Println("get chat for delete error")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	if !chat.Personal || chat.OwnerID != claims.Id {
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -121,8 +144,22 @@ func (ctrl *ChatCtrl) Exit(w http.ResponseWriter, r *http.Request, ps httprouter
 		return
 	}
 
-	id, _ := strconv.ParseInt(ps.ByName("id"), 10, 64)
-	chat, _ := ctrl.service.Get(id, true)
+	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
+
+	if err != nil {
+		log.Println("parse id for exit error:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	chat, err := ctrl.service.Get(id, []string{})
+
+	if err != nil {
+		log.Println("get chat for exit error:", err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
 	ctrl.service.Exit(chat)
 }
 
@@ -132,13 +169,23 @@ func (ctrl *ChatCtrl) Clean(w http.ResponseWriter, r *http.Request, ps httproute
 		return
 	}
 
-	id, _ := strconv.ParseInt(ps.ByName("id"), 10, 64)
-	chat, _ := ctrl.service.Get(id, true)
+	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
 
-	if !ctrl.service.Clean(chat) {
-		w.WriteHeader(http.StatusInternalServerError)
+	if err != nil {
+		log.Println("parse id for clean error:", err)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	chat, err := ctrl.service.Get(id, []string{})
+
+	if err != nil {
+		log.Println("get chat for clean error:", err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	ctrl.service.Exit(chat)
 }
 
 func (ctrl *ChatCtrl) checkRights(w http.ResponseWriter, r *http.Request, ps httprouter.Params) int {
@@ -149,7 +196,7 @@ func (ctrl *ChatCtrl) checkRights(w http.ResponseWriter, r *http.Request, ps htt
 		return http.StatusBadRequest
 	}
 
-	chat, err := ctrl.service.Get(id, true)
+	chat, err := ctrl.service.Get(id, []string{"users"})
 	isExist := false
 
 	if err != nil {
@@ -165,4 +212,25 @@ func (ctrl *ChatCtrl) checkRights(w http.ResponseWriter, r *http.Request, ps htt
 	}
 
 	return 0
+}
+
+func (ctrl *ChatCtrl) getUnreadCount(chats []*ewc.Chat) []dao.ChatData {
+	length := len(chats)
+	chatData := make([]dao.ChatData, 0, length)
+	chatIds := make([]int64, 0, length)
+	chatMap := make(map[int64]*ewc.Chat, length)
+
+	for i, chat := range chats {
+		chatIds[i] = chat.ID
+		chatMap[chat.ID] = chat
+	}
+
+	query := `
+		select chats.id, count(messages.*)
+		join on messages on messages.chat_id = chats.id
+		where chats.id in (?) and messages.is_read = true
+	`
+	log.Println(query)
+
+	return chatData
 }

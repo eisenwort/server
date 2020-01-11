@@ -3,10 +3,11 @@ package controller
 import (
 	"log"
 	"net/http"
-
 	"server/model/dao"
+	"strings"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/julienschmidt/httprouter"
 )
 
 var Config *dao.Config
@@ -24,4 +25,8 @@ func getClaims(r *http.Request) dao.JwtClaims {
 	}
 
 	return claims
+}
+
+func getInclude(ps httprouter.Params) []string {
+	return strings.Split(ps.ByName("include"), ",")
 }

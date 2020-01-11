@@ -1,6 +1,10 @@
 package dao
 
-import "github.com/dgrijalva/jwt-go"
+import (
+	"server/core/ewc"
+
+	"github.com/dgrijalva/jwt-go"
+)
 
 // Config - app config
 type Config struct {
@@ -24,4 +28,13 @@ type JwtClaims struct {
 	*jwt.MapClaims
 	Id  int64
 	Exp int64
+}
+
+func (JwtClaims) Valid() error {
+	return nil
+}
+
+type ChatData struct {
+	ewc.Chat
+	UnreadCount int `json:"unread_count"`
 }

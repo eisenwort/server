@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-
 	"server/core/ewc"
 	"server/model/dao"
 
@@ -89,6 +88,7 @@ func (ctrl *UserCtrl) Registration(w http.ResponseWriter, r *http.Request, ps ht
 	}
 
 	jsonData, _ := json.Marshal(ctrl.createAuthData(user.ID))
+	w.WriteHeader(http.StatusCreated)
 	w.Write(jsonData)
 }
 

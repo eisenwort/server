@@ -2,9 +2,11 @@ package controller
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
+
 	"server/core/ewc"
 	"server/model/dao"
 
@@ -77,10 +79,15 @@ func (ctrl *UserCtrl) Registration(w http.ResponseWriter, r *http.Request, ps ht
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
+	if password, ok = data["reset_password"]; !ok {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
 
 	user, err := ctrl.service.Create(login, password)
 
-	if user == nil {
+	if err != nil {
+		log.Println("create user error:", err)
 		errData, _ := json.Marshal(&dao.ApiError{Error: err.Error()})
 		w.WriteHeader(http.StatusConflict)
 		w.Write(errData)

@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+
 	"server/controller"
 	"server/core/ewc"
 	"server/middleware"
@@ -17,6 +18,8 @@ import (
 const defaultConfigPath = "./cfg.json"
 
 var config *dao.Config
+
+type httpHandler = func(w http.ResponseWriter, r *http.Request, ps httprouter.Params)
 
 func init() {
 	pathPtr := flag.String("config", defaultConfigPath, "Path for configuration file")
@@ -37,8 +40,6 @@ func init() {
 	controller.Config = config
 }
 
-type httpHandler = func(w http.ResponseWriter, r *http.Request, ps httprouter.Params)
-
 func jwtHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params, handler httpHandler) {
 	if err := middleware.TokenValidation(w, r, ps); err != nil {
 		w.WriteHeader(http.StatusForbidden)
@@ -47,16 +48,10 @@ func jwtHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ha
 	handler(w, r, ps)
 }
 
-func main() {
-	ewc.Setup(ewc.SetupData{
-		DbDriver:         config.Driver,
-		ConnectionString: config.ConnectionString,
-	})
-
+func createRouter() *httprouter.Router {
 	userCtrl := controller.NewUserCtrl(config)
 	chatCtrl := controller.NewChatCtrl(config)
 	messageCtrl := controller.NewMessageCtrl(config)
-
 	router := httprouter.New()
 
 	// user
@@ -100,6 +95,17 @@ func main() {
 		jwtHandler(w, r, ps, messageCtrl.Delete)
 	})
 
+	return router
+}
+
+func main() {
+	ewc.Setup(ewc.SetupData{
+		DbDriver:         config.Driver,
+		ConnectionString: config.ConnectionString,
+	})
+	middleware.Setup(config)
+
+	router := createRouter()
 	log.Println("Server start on", config.ServiceAddress)
 
 	if err := http.ListenAndServe(config.ServiceAddress, router); err != nil {

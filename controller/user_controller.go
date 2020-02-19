@@ -11,7 +11,7 @@ import (
 	"server/model/dao"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/julienschmidt/httprouter"
+	"github.com/gorilla/mux"
 )
 
 // UserCtrl - controller fot user
@@ -32,7 +32,7 @@ func NewUserCtrl(cfg *dao.Config) *UserCtrl {
 }
 
 // Login - auth user
-func (ctrl *UserCtrl) Login(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (ctrl *UserCtrl) Login(w http.ResponseWriter, r *http.Request) {
 	data := make(map[string]string)
 	var login, password string
 	ok := false
@@ -62,9 +62,9 @@ func (ctrl *UserCtrl) Login(w http.ResponseWriter, r *http.Request, ps httproute
 }
 
 // Login - auth user
-func (ctrl *UserCtrl) Registration(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (ctrl *UserCtrl) Registration(w http.ResponseWriter, r *http.Request) {
 	data := make(map[string]string)
-	var login, password string
+	var login, password, resetPassword string
 	ok := false
 
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
@@ -79,12 +79,12 @@ func (ctrl *UserCtrl) Registration(w http.ResponseWriter, r *http.Request, ps ht
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
-	if password, ok = data["reset_password"]; !ok {
+	if resetPassword, ok = data["reset_password"]; !ok {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
 
-	user, err := ctrl.service.Create(login, password)
+	user, err := ctrl.service.Create(login, password, resetPassword)
 
 	if err != nil {
 		log.Println("create user error:", err)
@@ -99,9 +99,10 @@ func (ctrl *UserCtrl) Registration(w http.ResponseWriter, r *http.Request, ps ht
 	w.Write(jsonData)
 }
 
-func (ctrl *UserCtrl) RefreshToken(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (ctrl *UserCtrl) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	claims := getClaims(r)
-	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -120,7 +121,7 @@ func (ctrl *UserCtrl) RefreshToken(w http.ResponseWriter, r *http.Request, ps ht
 	w.Write(jsonData)
 }
 
-func (ctrl *UserCtrl) Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (ctrl *UserCtrl) Update(w http.ResponseWriter, r *http.Request) {
 	user := new(ewc.User)
 	claims := getClaims(r)
 
@@ -129,7 +130,8 @@ func (ctrl *UserCtrl) Update(w http.ResponseWriter, r *http.Request, ps httprout
 		return
 	}
 
-	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -148,11 +150,13 @@ func (ctrl *UserCtrl) Update(w http.ResponseWriter, r *http.Request, ps httprout
 	}
 	if err := json.NewEncoder(w).Encode(user); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 }
 
-func (ctrl *UserCtrl) Get(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
+func (ctrl *UserCtrl) Get(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -174,19 +178,35 @@ func (ctrl *UserCtrl) Get(w http.ResponseWriter, r *http.Request, ps httprouter.
 	}
 	if err := json.NewEncoder(w).Encode(user); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 }
 
-func (ctrl *UserCtrl) GetByLogin(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (ctrl *UserCtrl) GetByLogin(w http.ResponseWriter, r *http.Request) {
 	claims := getClaims(r)
-	user := ctrl.service.GetByLogin(ps.ByName("login"))
+	vars := mux.Vars(r)
+	login := vars["login"]
 
-	if user.ID != claims.Id {
+	// check friend
+	friends := ctrl.service.GetFriends(claims.Id)
+	isFriends := false
+
+	for _, friend := range friends {
+		if friend.Login == login {
+			isFriends = true
+			break
+		}
+	}
+	if !isFriends {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
+
+	user := ctrl.service.GetByLogin(login)
+
 	if err := json.NewEncoder(w).Encode(user); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 }
 

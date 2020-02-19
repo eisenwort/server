@@ -5,10 +5,11 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+
 	"server/core/ewc"
 	"server/model/dao"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/gorilla/mux"
 )
 
 type MessageCtrl struct {
@@ -24,8 +25,8 @@ func NewMessageCtrl(cfg *dao.Config) *MessageCtrl {
 	return ctrl
 }
 
-func (ctrl MessageCtrl) Create(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	msg := new(ewc.Message)
+func (ctrl MessageCtrl) Create(w http.ResponseWriter, r *http.Request) {
+	msg := ewc.Message{}
 	claims := getClaims(r)
 
 	if err := json.NewDecoder(r.Body).Decode(msg); err != nil {
@@ -53,10 +54,11 @@ func (ctrl MessageCtrl) Create(w http.ResponseWriter, r *http.Request, ps httpro
 	// todo: to socket
 }
 
-func (ctrl MessageCtrl) Delete(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	msg := new(ewc.Message)
+func (ctrl MessageCtrl) Delete(w http.ResponseWriter, r *http.Request) {
+	msg := ewc.Message{}
 	claims := getClaims(r)
-	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 
 	if err != nil {
 		log.Println("parse id error:", err)

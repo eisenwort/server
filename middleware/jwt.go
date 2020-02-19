@@ -30,6 +30,15 @@ func TokenValidation(w http.ResponseWriter, r *http.Request, ps httprouter.Param
 	return nil
 }
 
+func MuxTokenValidation(w http.ResponseWriter, r *http.Request) error {
+	if err := jwtValidate(r); err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		return err
+	}
+
+	return nil
+}
+
 func jwtValidate(r *http.Request) error {
 	tokenString := r.Header.Get(authHeader)
 

@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"server/core/ewc"
-	"server/model/dao"
 	"strconv"
 
-	"github.com/julienschmidt/httprouter"
+	"server/core/ewc"
+	"server/model/dao"
+
+	"github.com/gorilla/mux"
 )
 
 type ChatCtrl struct {
@@ -26,7 +27,7 @@ func NewChatCtrl(cfg *dao.Config) *ChatCtrl {
 	return ctrl
 }
 
-func (ctrl *ChatCtrl) GetList(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (ctrl *ChatCtrl) GetList(w http.ResponseWriter, r *http.Request) {
 	claims := getClaims(r)
 	chats, err := ctrl.service.GetForUser(claims.Id)
 
@@ -43,21 +44,21 @@ func (ctrl *ChatCtrl) GetList(w http.ResponseWriter, r *http.Request, ps httprou
 	}
 }
 
-func (ctrl *ChatCtrl) Get(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	if status := ctrl.checkRights(w, r, ps); status != 0 {
-		w.WriteHeader(status)
-		return
-	}
-
-	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
+func (ctrl *ChatCtrl) Get(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 
 	if err != nil {
 		log.Println("parse id error:", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	if status := ctrl.checkRights(id, r); status != 0 {
+		w.WriteHeader(status)
+		return
+	}
 
-	includes := getInclude(ps)
+	includes := getInclude(vars["include"])
 	chat, err := ctrl.service.Get(id, includes)
 
 	if err := json.NewEncoder(w).Encode(chat); err != nil {
@@ -66,7 +67,7 @@ func (ctrl *ChatCtrl) Get(w http.ResponseWriter, r *http.Request, ps httprouter.
 	}
 }
 
-func (ctrl *ChatCtrl) Create(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (ctrl *ChatCtrl) Create(w http.ResponseWriter, r *http.Request) {
 	claims := getClaims(r)
 
 	if user := ctrl.userService.Get(claims.Id); user.Reseted {
@@ -74,10 +75,10 @@ func (ctrl *ChatCtrl) Create(w http.ResponseWriter, r *http.Request, ps httprout
 		return
 	}
 
-	chat := &ewc.Chat{}
+	chat := ewc.Chat{}
 	isExist := false
 
-	if err := json.NewDecoder(r.Body).Decode(chat); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&chat); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -106,23 +107,21 @@ func (ctrl *ChatCtrl) Create(w http.ResponseWriter, r *http.Request, ps httprout
 	}
 }
 
-func (ctrl *ChatCtrl) Delete(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	if status := ctrl.checkRights(w, r, ps); status != 0 {
-		w.WriteHeader(status)
-		return
-	}
-
-	claims := getClaims(r)
-	f := ps.ByName("id")
-	log.Println(f)
-	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
+func (ctrl *ChatCtrl) Delete(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 
 	if err != nil {
 		log.Println("parse id for delete error:", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	if status := ctrl.checkRights(id, r); status != 0 {
+		w.WriteHeader(status)
+		return
+	}
 
+	claims := getClaims(r)
 	chat, err := ctrl.service.Get(id, []string{})
 
 	if err != nil {
@@ -135,20 +134,20 @@ func (ctrl *ChatCtrl) Delete(w http.ResponseWriter, r *http.Request, ps httprout
 		return
 	}
 
-	ctrl.service.Delete(chat)
+	ctrl.service.Delete(&chat)
 }
 
-func (ctrl *ChatCtrl) Exit(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	if status := ctrl.checkRights(w, r, ps); status != 0 {
-		w.WriteHeader(status)
-		return
-	}
-
-	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
+func (ctrl *ChatCtrl) Exit(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 
 	if err != nil {
 		log.Println("parse id for exit error:", err)
 		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if status := ctrl.checkRights(id, r); status != 0 {
+		w.WriteHeader(status)
 		return
 	}
 
@@ -160,20 +159,20 @@ func (ctrl *ChatCtrl) Exit(w http.ResponseWriter, r *http.Request, ps httprouter
 		return
 	}
 
-	ctrl.service.Exit(chat)
+	ctrl.service.Exit(&chat)
 }
 
-func (ctrl *ChatCtrl) Clean(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	if status := ctrl.checkRights(w, r, ps); status != 0 {
-		w.WriteHeader(status)
-		return
-	}
-
-	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
+func (ctrl *ChatCtrl) Clean(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 
 	if err != nil {
 		log.Println("parse id for clean error:", err)
 		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if status := ctrl.checkRights(id, r); status != 0 {
+		w.WriteHeader(status)
 		return
 	}
 
@@ -185,17 +184,11 @@ func (ctrl *ChatCtrl) Clean(w http.ResponseWriter, r *http.Request, ps httproute
 		return
 	}
 
-	ctrl.service.Exit(chat)
+	ctrl.service.Exit(&chat)
 }
 
-func (ctrl *ChatCtrl) checkRights(w http.ResponseWriter, r *http.Request, ps httprouter.Params) int {
+func (ctrl *ChatCtrl) checkRights(id int64, r *http.Request) int {
 	claims := getClaims(r)
-	id, err := strconv.ParseInt(ps.ByName("id"), 10, 64)
-
-	if err != nil {
-		return http.StatusBadRequest
-	}
-
 	chat, err := ctrl.service.Get(id, []string{"users"})
 	isExist := false
 

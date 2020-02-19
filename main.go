@@ -12,6 +12,7 @@ import (
 	"server/middleware"
 	"server/model/dao"
 
+	"github.com/gorilla/mux"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -20,6 +21,7 @@ const defaultConfigPath = "./cfg.json"
 var config *dao.Config
 
 type httpHandler = func(w http.ResponseWriter, r *http.Request, ps httprouter.Params)
+type mhttpHandler = func(w http.ResponseWriter, r *http.Request)
 
 func init() {
 	pathPtr := flag.String("config", defaultConfigPath, "Path for configuration file")
@@ -48,7 +50,68 @@ func jwtHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ha
 	handler(w, r, ps)
 }
 
-func createRouter() *httprouter.Router {
+func mjwtHandler(w http.ResponseWriter, r *http.Request, handler mhttpHandler) {
+	if err := middleware.MuxTokenValidation(w, r); err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	handler(w, r)
+}
+
+func muxRouter() *mux.Router {
+	userCtrl := controller.NewUserCtrl(config)
+	chatCtrl := controller.NewChatCtrl(config)
+	messageCtrl := controller.NewMessageCtrl(config)
+	router := mux.NewRouter()
+
+	// user
+	router.HandleFunc("/login", userCtrl.Login).Methods(http.MethodPost)
+	router.HandleFunc("registration", userCtrl.Registration).Methods(http.MethodPost)
+	router.HandleFunc("users/:id/refresh", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, userCtrl.RefreshToken)
+	}).Methods(http.MethodPost)
+	router.HandleFunc("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, userCtrl.Update)
+	}).Methods(http.MethodPut)
+	router.HandleFunc("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, userCtrl.Get)
+	}).Methods(http.MethodGet)
+	router.HandleFunc("/users/login/{login}", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, userCtrl.GetByLogin)
+	}).Methods(http.MethodGet)
+
+	// chat
+	router.HandleFunc("/chats", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, chatCtrl.GetList)
+	}).Methods(http.MethodGet)
+	router.HandleFunc("/chats/{id}", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, chatCtrl.Get)
+	}).Methods(http.MethodGet)
+	router.HandleFunc("/chats", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, chatCtrl.Create)
+	}).Methods(http.MethodPost)
+	router.HandleFunc("/chats/{id}", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, chatCtrl.Delete)
+	}).Methods(http.MethodDelete)
+	router.HandleFunc("/chats/{id}/exit", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, chatCtrl.Exit)
+	}).Methods(http.MethodDelete)
+	router.HandleFunc("/chats/{id}/clean", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, chatCtrl.Clean)
+	}).Methods(http.MethodDelete)
+
+	// message
+	router.HandleFunc("/messages", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, messageCtrl.Create)
+	}).Methods(http.MethodPost)
+	router.HandleFunc("/messages/{id}", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, messageCtrl.Delete)
+	}).Methods(http.MethodDelete)
+
+	return router
+}
+
+/*func createRouter() *httprouter.Router {
 	userCtrl := controller.NewUserCtrl(config)
 	chatCtrl := controller.NewChatCtrl(config)
 	messageCtrl := controller.NewMessageCtrl(config)
@@ -65,6 +128,9 @@ func createRouter() *httprouter.Router {
 	})
 	router.GET("/users/:id", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		jwtHandler(w, r, ps, userCtrl.Get)
+	})
+	router.GET("/users/:login/friend", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		jwtHandler(w, r, ps, userCtrl.GetByLogin)
 	})
 
 	// chat
@@ -97,15 +163,17 @@ func createRouter() *httprouter.Router {
 
 	return router
 }
-
+*/
 func main() {
-	ewc.Setup(ewc.SetupData{
+	util := ewc.NewUtil()
+	util.Setup(&ewc.SetupData{
 		DbDriver:         config.Driver,
 		ConnectionString: config.ConnectionString,
 	})
+	defer util.CloseApp()
 	middleware.Setup(config)
 
-	router := createRouter()
+	router := muxRouter()
 	log.Println("Server start on", config.ServiceAddress)
 
 	if err := http.ListenAndServe(config.ServiceAddress, router); err != nil {

@@ -1,19 +1,18 @@
 package controller
 
 import (
-	"bytes"
 	"encoding/json"
 	"log"
 	"net/http"
 	"os"
-	"server/core/ewc"
 	"strconv"
 	"testing"
 	"time"
 
+	"server/core/ewc"
+
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/joho/godotenv"
-	"github.com/julienschmidt/httprouter"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,7 +30,8 @@ func setupMsg() {
 	cfg.Driver = driver
 	cfg.ConnectionString = connectionString
 
-	ewc.Setup(ewc.SetupData{
+	util := ewc.Util{}
+	util.Setup(&ewc.SetupData{
 		DbDriver:         driver,
 		ConnectionString: connectionString,
 	})
@@ -88,7 +88,7 @@ func TestCreateMessage(t *testing.T) {
 		Text:   "msg text",
 	}
 	body, _ := json.Marshal(message)
-	status, _ := createResponse(http.MethodPost, "http://localhost/messages", nil, bytes.NewReader(body), ctrl.Create)
+	status, _ := createMResponse(http.MethodPost, "http://localhost/messages", nil, body, ctrl.Create)
 
 	assert.Equal(t, http.StatusCreated, status)
 }
@@ -98,11 +98,8 @@ func TestDeleteMessage(t *testing.T) {
 	defer os.Remove(connectionString)
 
 	ctrl := NewMessageCtrl(cfg)
-	ps := []httprouter.Param{
-		httprouter.Param{
-			Key:   "id",
-			Value: "1",
-		},
+	ps := map[string]string{
+		"id": "1",
 	}
 	message := ewc.Message{
 		ID:     goodId,
@@ -111,7 +108,7 @@ func TestDeleteMessage(t *testing.T) {
 		Text:   "msg text",
 	}
 	body, _ := json.Marshal(message)
-	status, _ := createResponse(http.MethodPost, "http://localhost/messages/1", ps, bytes.NewReader(body), ctrl.Delete)
+	status, _ := createMResponse(http.MethodPost, "http://localhost/messages/1", ps, body, ctrl.Delete)
 
 	assert.Equal(t, http.StatusOK, status)
 }

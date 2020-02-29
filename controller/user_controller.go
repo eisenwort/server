@@ -84,6 +84,13 @@ func (ctrl *UserCtrl) Registration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	existingUser := ctrl.service.GetByLogin(login)
+
+	if existingUser.ID != 0 {
+		w.WriteHeader(http.StatusConflict)
+		return
+	}
+
 	user, err := ctrl.service.Create(login, password, resetPassword)
 
 	if err != nil {
@@ -172,7 +179,7 @@ func (ctrl *UserCtrl) Get(w http.ResponseWriter, r *http.Request) {
 
 	user := ctrl.service.Get(id)
 
-	if user == nil {
+	if user.ID == 0 {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -205,6 +212,83 @@ func (ctrl *UserCtrl) GetByLogin(w http.ResponseWriter, r *http.Request) {
 	user := ctrl.service.GetByLogin(login)
 
 	if err := json.NewEncoder(w).Encode(user); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func (ctrl *UserCtrl) GetFriends(w http.ResponseWriter, r *http.Request) {
+	claims := getClaims(r)
+	friends := ctrl.service.GetFriends(claims.Id)
+
+	if err := json.NewEncoder(w).Encode(friends); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func (ctrl *UserCtrl) AddFriend(w http.ResponseWriter, r *http.Request) {
+	claims := getClaims(r)
+	data := make(map[string]string)
+
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if _, ok := data["login"]; !ok {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
+	user := ctrl.service.GetByLogin(data["login"])
+
+	if user.ID == 0 {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	friends := ctrl.service.GetFriends(claims.Id)
+
+	for _, item := range friends {
+		if item.ID == user.ID {
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+	}
+
+	friend := ctrl.service.AddFriend(claims.Id, user.ID)
+	w.WriteHeader(http.StatusCreated)
+
+	if err := json.NewEncoder(w).Encode(friend); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func (ctrl *UserCtrl) DeleteFriend(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	claims := getClaims(r)
+	friends := ctrl.service.GetFriends(claims.Id)
+	isExist := false
+
+	for _, friend := range friends {
+		if friend.ID == id {
+			isExist = true
+			break
+		}
+	}
+	if !isExist {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if !ctrl.service.DeleteFriend(claims.Id, id) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

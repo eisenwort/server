@@ -76,6 +76,15 @@ func muxRouter() *mux.Router {
 	router.HandleFunc("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
 		mjwtHandler(w, r, userCtrl.Get)
 	}).Methods(http.MethodGet)
+	router.HandleFunc("/users/friends", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, userCtrl.GetFriends)
+	}).Methods(http.MethodGet)
+	router.HandleFunc("/users/friends", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, userCtrl.AddFriend)
+	}).Methods(http.MethodPost)
+	router.HandleFunc("/users/friends/{id}", func(w http.ResponseWriter, r *http.Request) {
+		mjwtHandler(w, r, userCtrl.DeleteFriend)
+	}).Methods(http.MethodDelete)
 	router.HandleFunc("/users/login/{login}", func(w http.ResponseWriter, r *http.Request) {
 		mjwtHandler(w, r, userCtrl.GetByLogin)
 	}).Methods(http.MethodGet)

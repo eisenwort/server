@@ -58,7 +58,7 @@ func (ctrl *ChatCtrl) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	includes := getInclude(vars["include"])
+	includes := getInclude(r.FormValue("include"))
 	chat, err := ctrl.service.Get(id, includes)
 
 	if err := json.NewEncoder(w).Encode(chat); err != nil {

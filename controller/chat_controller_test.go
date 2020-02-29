@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,11 +9,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"server/core/ewc"
-	"server/model/dao"
 	"strconv"
 	"testing"
 	"time"
+
+	"server/core/ewc"
+	"server/model/dao"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/jinzhu/gorm"
@@ -50,7 +50,8 @@ func setupChats() {
 	cfg.Driver = driver
 	cfg.ConnectionString = connectionString
 
-	ewc.Setup(ewc.SetupData{
+	util := ewc.NewUtil()
+	util.Setup(&ewc.SetupData{
 		DbDriver:         driver,
 		ConnectionString: connectionString,
 	})
@@ -133,13 +134,13 @@ func createJwt() string {
 	return tokenString
 }
 
-func createResponse(method string, addr string, ps httprouter.Params, rbody io.Reader, handler func(w http.ResponseWriter, r *http.Request, ps httprouter.Params)) (int, []byte) {
+func createResponse(method string, addr string, ps httprouter.Params, rbody io.Reader, handler func(w http.ResponseWriter, r *http.Request)) (int, []byte) {
 	token := createJwt()
 	r := httptest.NewRequest(method, addr, rbody)
 	r.Header.Add("X-Auth-Token", token)
 	w := httptest.NewRecorder()
 
-	handler(w, r, ps)
+	handler(w, r)
 	resp := w.Result()
 	body, _ := ioutil.ReadAll(resp.Body)
 
@@ -151,7 +152,7 @@ func TestGetList(t *testing.T) {
 	defer os.Remove(connectionString)
 
 	ctrl := NewChatCtrl(cfg)
-	status, body := createResponse(http.MethodGet, "http://localhost/chats", nil, nil, ctrl.GetList)
+	status, body := createMResponse(http.MethodGet, "http://localhost/chats", nil, nil, ctrl.GetList)
 	chats := make([]*ewc.Chat, 0)
 
 	assert.Equal(t, http.StatusOK, status)
@@ -175,13 +176,10 @@ func TestGet(t *testing.T) {
 	defer os.Remove(connectionString)
 
 	ctrl := NewChatCtrl(cfg)
-	ps := []httprouter.Param{
-		httprouter.Param{
-			Key:   "id",
-			Value: "1",
-		},
+	ps := map[string]string{
+		"id": "1",
 	}
-	status, body := createResponse(http.MethodGet, "http://localhost/chats/1", ps, nil, ctrl.Get)
+	status, body := createMResponse(http.MethodGet, "http://localhost/chats/1", ps, nil, ctrl.Get)
 	chat := ewc.Chat{}
 
 	assert.Equal(t, http.StatusOK, status)
@@ -194,13 +192,10 @@ func TestGet(t *testing.T) {
 	assert.Equal(t, goodId, chat.ID)
 
 	// not found
-	ps = []httprouter.Param{
-		httprouter.Param{
-			Key:   "id",
-			Value: "111",
-		},
+	ps = map[string]string{
+		"id": "111",
 	}
-	status, body = createResponse(http.MethodGet, "http://localhost/chats/1111", ps, nil, ctrl.Get)
+	status, body = createMResponse(http.MethodGet, "http://localhost/chats/1111", ps, nil, ctrl.Get)
 	assert.Equal(t, http.StatusNotFound, status)
 
 	// forbidden
@@ -220,7 +215,7 @@ func TestCreate(t *testing.T) {
 			},
 		},
 	})
-	status, body := createResponse(http.MethodPost, "http://localhost/chats", nil, bytes.NewReader(body), ctrl.Create)
+	status, body := createMResponse(http.MethodPost, "http://localhost/chats", nil, body, ctrl.Create)
 	chat := ewc.Chat{}
 
 	assert.Equal(t, http.StatusCreated, status)
@@ -235,17 +230,10 @@ func TestCreate(t *testing.T) {
 	assert.Equal(t, "new chat", chat.Name)
 	assert.Equal(t, goodId, chat.OwnerID)
 
-	ps := []httprouter.Param{
-		httprouter.Param{
-			Key:   "id",
-			Value: fmt.Sprintf("%d", chat.ID),
-		},
-		httprouter.Param{
-			Key:   "include",
-			Value: "users",
-		},
+	ps := map[string]string{
+		"id": fmt.Sprintf("%d", chat.ID),
 	}
-	status, body = createResponse(http.MethodGet, "http://localhost/chats/1111", ps, nil, ctrl.Get)
+	status, body = createMResponse(http.MethodGet, "http://localhost/chats/1111", ps, nil, ctrl.Get)
 	assert.Equal(t, http.StatusOK, status)
 
 	for _, user := range chat.Users {
@@ -258,15 +246,12 @@ func TestDelete(t *testing.T) {
 	defer os.Remove(connectionString)
 
 	ctrl := NewChatCtrl(cfg)
-	ps := []httprouter.Param{
-		httprouter.Param{
-			Key:   "id",
-			Value: "1",
-		},
+	ps := map[string]string{
+		"id": "1",
 	}
-	status, _ := createResponse(http.MethodDelete, "http://localhost/chats/1", ps, nil, ctrl.Delete)
+	status, _ := createMResponse(http.MethodDelete, "http://localhost/chats/1", ps, nil, ctrl.Delete)
 	assert.Equal(t, http.StatusOK, status)
 
-	status, _ = createResponse(http.MethodGet, "http://localhost/chats/1", ps, nil, ctrl.Get)
+	status, _ = createMResponse(http.MethodGet, "http://localhost/chats/1", ps, nil, ctrl.Get)
 	assert.Equal(t, http.StatusNotFound, status)
 }

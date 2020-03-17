@@ -218,7 +218,21 @@ func (ctrl *UserCtrl) GetByLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ctrl *UserCtrl) GetFriends(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	claims := getClaims(r)
+
+	if id != claims.Id {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
 	friends := ctrl.service.GetFriends(claims.Id)
 
 	if err := json.NewEncoder(w).Encode(friends); err != nil {
@@ -228,9 +242,21 @@ func (ctrl *UserCtrl) GetFriends(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ctrl *UserCtrl) AddFriend(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	claims := getClaims(r)
 	data := make(map[string]string)
 
+	if id != claims.Id {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -274,7 +300,20 @@ func (ctrl *UserCtrl) DeleteFriend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userId, err := strconv.ParseInt(vars["user_id"], 10, 64)
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	claims := getClaims(r)
+
+	if userId != claims.Id {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
 	friends := ctrl.service.GetFriends(claims.Id)
 	isExist := false
 

@@ -46,6 +46,7 @@ func (ctrl *ChatCtrl) GetList(w http.ResponseWriter, r *http.Request) {
 
 func (ctrl *ChatCtrl) Get(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+	claims := getClaims(r)
 	id, err := strconv.ParseInt(vars["id"], 10, 64)
 
 	if err != nil {
@@ -53,8 +54,8 @@ func (ctrl *ChatCtrl) Get(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if status := ctrl.checkRights(id, r); status != 0 {
-		w.WriteHeader(status)
+	if !ctrl.service.IsUserInChat(id, claims.Id) {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
@@ -110,18 +111,18 @@ func (ctrl *ChatCtrl) Create(w http.ResponseWriter, r *http.Request) {
 func (ctrl *ChatCtrl) Delete(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.ParseInt(vars["id"], 10, 64)
+	claims := getClaims(r)
 
 	if err != nil {
 		log.Println("parse id for delete error:", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if status := ctrl.checkRights(id, r); status != 0 {
-		w.WriteHeader(status)
+	if !ctrl.service.IsUserInChat(id, claims.Id) {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
-	claims := getClaims(r)
 	chat, err := ctrl.service.Get(id, []string{})
 
 	if err != nil {
@@ -134,11 +135,12 @@ func (ctrl *ChatCtrl) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctrl.service.Delete(&chat)
+	ctrl.service.Delete(chat)
 }
 
 func (ctrl *ChatCtrl) Exit(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+	claims := getClaims(r)
 	id, err := strconv.ParseInt(vars["id"], 10, 64)
 
 	if err != nil {
@@ -146,8 +148,8 @@ func (ctrl *ChatCtrl) Exit(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if status := ctrl.checkRights(id, r); status != 0 {
-		w.WriteHeader(status)
+	if !ctrl.service.IsUserInChat(id, claims.Id) {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
@@ -159,11 +161,12 @@ func (ctrl *ChatCtrl) Exit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctrl.service.Exit(&chat)
+	ctrl.service.Exit(chat)
 }
 
 func (ctrl *ChatCtrl) Clean(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+	claims := getClaims(r)
 	id, err := strconv.ParseInt(vars["id"], 10, 64)
 
 	if err != nil {
@@ -171,8 +174,8 @@ func (ctrl *ChatCtrl) Clean(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if status := ctrl.checkRights(id, r); status != 0 {
-		w.WriteHeader(status)
+	if !ctrl.service.IsUserInChat(id, claims.Id) {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
@@ -184,27 +187,7 @@ func (ctrl *ChatCtrl) Clean(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctrl.service.Exit(&chat)
-}
-
-func (ctrl *ChatCtrl) checkRights(id int64, r *http.Request) int {
-	claims := getClaims(r)
-	chat, err := ctrl.service.Get(id, []string{"users"})
-	isExist := false
-
-	if err != nil {
-		return http.StatusNotFound
-	}
-	for _, user := range chat.Users {
-		if user.ID == claims.Id {
-			isExist = true
-		}
-	}
-	if !isExist {
-		return http.StatusForbidden
-	}
-
-	return 0
+	ctrl.service.Clean(chat)
 }
 
 func (ctrl *ChatCtrl) getUnreadCount(chats []*ewc.Chat) []dao.ChatData {

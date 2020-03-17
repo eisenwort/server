@@ -13,14 +13,16 @@ import (
 )
 
 type MessageCtrl struct {
-	config  *dao.Config
-	service *ewc.DbMessageService
+	config      *dao.Config
+	service     *ewc.DbMessageService
+	chatService *ewc.DbChatService
 }
 
 func NewMessageCtrl(cfg *dao.Config) *MessageCtrl {
 	ctrl := new(MessageCtrl)
 	ctrl.config = cfg
 	ctrl.service = ewc.NewDbMessageService()
+	ctrl.chatService = ewc.NewDbChatService()
 
 	return ctrl
 }
@@ -34,6 +36,10 @@ func (ctrl MessageCtrl) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if msg.UserID != claims.Id {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	if !ctrl.chatService.IsUserInChat(msg.ChatID, claims.Id) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -81,4 +87,52 @@ func (ctrl MessageCtrl) Delete(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+}
+
+func (ctrl MessageCtrl) GetByChat(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	chatId, err := strconv.ParseInt(vars["chat_id"], 10, 64)
+
+	if err != nil {
+		log.Println("parse id error:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	page, err := strconv.Atoi(r.FormValue("page"))
+
+	if err != nil {
+		log.Println("parse page error:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	claims := getClaims(r)
+
+	if !ctrl.chatService.IsUserInChat(chatId, claims.Id) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	messages := ctrl.service.GetByChat(chatId, page)
+
+	if err := json.NewEncoder(w).Encode(messages); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func (ctrl MessageCtrl) GetLastId(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	chatId, err := strconv.ParseInt(vars["chat_id"], 10, 64)
+
+	if err != nil {
+		log.Println("parse id error:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	lastId := ctrl.service.GetLastId(chatId)
+
+	w.Header().Set("X-Last-Id", strconv.FormatInt(lastId, 10))
 }
